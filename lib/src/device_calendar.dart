@@ -1,6 +1,8 @@
 import 'dart:collection';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -212,19 +214,34 @@ class DeviceCalendarPlugin {
       assertParameters: (result) {
         // Setting time to 0 for all day events
         if (event.allDay == true) {
-          if (event.start != null) {
-            var dateStart = DateTime(event.start!.year, event.start!.month,
-                event.start!.day, 0, 0, 0);
+          if (defaultTargetPlatform == TargetPlatform.android) {
+            // Android stores all-day events at the UTC date of the instant
+            // and requires the "UTC" zone. Take the date parts from the
+            // event's own fields (the feed's date) so the stored date does not
+            // depend on the phone's time zone. No day is added to `end` (LMA-922).
+            if (event.start != null) {
+              event.start = TZDateTime.utc(
+                  event.start!.year, event.start!.month, event.start!.day);
+            }
+            if (event.end != null) {
+              event.end = TZDateTime.utc(
+                  event.end!.year, event.end!.month, event.end!.day);
+            }
+          } else {
+            if (event.start != null) {
+              var dateStart = DateTime(event.start!.year, event.start!.month,
+                  event.start!.day, 0, 0, 0);
 
-            event.start = TZDateTime.from(dateStart,
-                timeZoneDatabase.locations[event.start!.location.name]!);
-          }
-          if (event.end != null) {
-            var dateEnd = DateTime(
-                event.end!.year, event.end!.month, event.end!.day, 0, 0, 0);
+              event.start = TZDateTime.from(dateStart,
+                  timeZoneDatabase.locations[event.start!.location.name]!);
+            }
+            if (event.end != null) {
+              var dateEnd = DateTime(
+                  event.end!.year, event.end!.month, event.end!.day, 0, 0, 0);
 
-            event.end = TZDateTime.from(
-                dateEnd, timeZoneDatabase.locations[event.end!.location.name]!);
+              event.end = TZDateTime.from(dateEnd,
+                  timeZoneDatabase.locations[event.end!.location.name]!);
+            }
           }
         }
 
@@ -250,7 +267,17 @@ class DeviceCalendarPlugin {
           ErrorMessages.createOrUpdateEventInvalidArgumentsMessage,
         );
       },
-      arguments: () => event.toJson(),
+      arguments: () {
+        final json = event.toJson();
+        if (event.allDay == true &&
+            defaultTargetPlatform == TargetPlatform.android) {
+          // timezone >= 0.10 names its UTC location "Etc/UTC"; Android needs
+          // the literal "UTC" for all-day events.
+          json['eventStartTimeZone'] = 'UTC';
+          json['eventEndTimeZone'] = 'UTC';
+        }
+        return json;
+      },
     );
   }
 
