@@ -1,7 +1,9 @@
 import 'package:device_calendar/device_calendar.dart';
 import 'package:device_calendar/src/common/error_codes.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:timezone/timezone.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -134,6 +136,74 @@ void main() {
     expect(result?.errors, isEmpty);
     expect(result?.data, isNotEmpty);
     expect(result?.data, fakeNewEventId);
+  });
+
+  group('CreateEvent all-day', () {
+    late Map<dynamic, dynamic> sent;
+
+    Event allDayEvent() {
+      final newYork = timeZoneDatabase.locations['America/New_York']!;
+      return Event('fakeCalendarId')
+        ..title = 'Day off'
+        ..allDay = true
+        ..start = TZDateTime(newYork, 2026, 10, 4)
+        ..end = TZDateTime(newYork, 2026, 10, 5);
+    }
+
+    setUp(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
+            sent = methodCall.arguments as Map<dynamic, dynamic>;
+            return 'fakeNewEventId';
+          });
+    });
+
+    tearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    test(
+      'Android sends UTC midnight on the feed date, end not extended',
+      () async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+        await deviceCalendarPlugin.createOrUpdateEvent(allDayEvent());
+
+        expect(sent['eventStartTimeZone'], 'UTC');
+        expect(sent['eventEndTimeZone'], 'UTC');
+        expect(
+          sent['eventStartDate'],
+          DateTime.utc(2026, 10, 4).millisecondsSinceEpoch,
+        );
+        expect(
+          sent['eventEndDate'],
+          DateTime.utc(2026, 10, 5).millisecondsSinceEpoch,
+        );
+        // LMA-922: a one-day all-day event must end exactly one day after it
+        // starts. Never add an extra day to the end.
+        expect(
+          (sent['eventEndDate'] as int) - (sent['eventStartDate'] as int),
+          const Duration(days: 1).inMilliseconds,
+        );
+      },
+    );
+
+    test('iOS keeps sending device-local midnight in the event zone', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+      await deviceCalendarPlugin.createOrUpdateEvent(allDayEvent());
+
+      expect(sent['eventStartTimeZone'], 'America/New_York');
+      expect(sent['eventEndTimeZone'], 'America/New_York');
+      expect(
+        sent['eventStartDate'],
+        DateTime(2026, 10, 4).millisecondsSinceEpoch,
+      );
+      expect(
+        sent['eventEndDate'],
+        DateTime(2026, 10, 5).millisecondsSinceEpoch,
+      );
+    });
   });
 
   test('UpdateEvent_Returns_Successfully', () async {
