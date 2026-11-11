@@ -21,6 +21,11 @@ class Calendar {
   // Read-only. Account type associated with the calendar
   String? accountType;
 
+  /// Read-only. Android only: the provider's `sync_events` flag. When it is
+  /// false the provider leaves the calendar out of every Instances rebuild
+  /// (time-zone change, tzdata update), so its events stop showing. Null on iOS.
+  bool? syncEvents;
+
   Calendar(
       {this.id,
       this.name,
@@ -28,7 +33,8 @@ class Calendar {
       this.isDefault,
       this.color,
       this.accountName,
-      this.accountType});
+      this.accountType,
+      this.syncEvents});
 
   Calendar.fromJson(Map<String, dynamic> json) {
     id = json['id'];
@@ -38,6 +44,7 @@ class Calendar {
     color = json['color'];
     accountName = json['accountName'];
     accountType = json['accountType'];
+    syncEvents = json['syncEvents'];
   }
 
   Map<String, dynamic> toJson() {
@@ -48,7 +55,8 @@ class Calendar {
       'isDefault': isDefault,
       'color': color,
       'accountName': accountName,
-      'accountType': accountType
+      'accountType': accountType,
+      'syncEvents': syncEvents
     };
 
     return data;
