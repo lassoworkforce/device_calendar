@@ -10,6 +10,8 @@ class ChannelConstants {
   static const String methodNameCreateOrUpdateEvent = 'createOrUpdateEvent';
   static const String methodNameCreateCalendar = 'createCalendar';
   static const String methodNameDeleteCalendar = 'deleteCalendar';
+  static const String methodNameEnableCalendarSync = 'enableCalendarSync';
+  static const String methodNameRetrieveEventIds = 'retrieveEventIds';
   static const String methodNameShowiOSEventModal = 'showiOSEventModal';
 
   static const String parameterNameCalendarId = 'calendarId';

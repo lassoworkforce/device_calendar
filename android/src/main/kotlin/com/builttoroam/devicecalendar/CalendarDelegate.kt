@@ -341,6 +341,10 @@ class CalendarDelegate(binding: ActivityPluginBinding?, context: Context) :
             )
         ) // Red colour as a default
         values.put(CalendarContract.Calendars.OWNER_ACCOUNT, localAccountName)
+        // AOSP defaults sync_events to 0, and a rebuild of the Instances table
+        // (time-zone change, tzdata update) skips such calendars, hiding their events.
+        values.put(CalendarContract.Calendars.SYNC_EVENTS, 1)
+        values.put(CalendarContract.Calendars.VISIBLE, 1)
         values.put(
             CalendarContract.Calendars.CALENDAR_TIME_ZONE,
             java.util.Calendar.getInstance().timeZone.id
@@ -351,6 +355,91 @@ class CalendarDelegate(binding: ActivityPluginBinding?, context: Context) :
         val calendarId = java.lang.Long.parseLong(result?.lastPathSegment!!)
 
         finishWithSuccess(calendarId.toString(), pendingChannelResult)
+    }
+
+    /**
+     * Turns SYNC_EVENTS and VISIBLE on for an existing calendar. Uses the same
+     * sync-adapter URI as createCalendar, with the calendar's own account.
+     */
+    fun enableCalendarSync(calendarId: String, pendingChannelResult: MethodChannel.Result) {
+        if (!arePermissionsGranted()) {
+            finishWithError(
+                EC.NOT_AUTHORIZED,
+                "Calendar permissions are needed to repair the calendar",
+                pendingChannelResult
+            )
+            return
+        }
+        val calendarIdNumber = calendarId.toLongOrNull()
+        if (calendarIdNumber == null) {
+            finishWithError(
+                EC.INVALID_ARGUMENT,
+                EM.CALENDAR_ID_INVALID_ARGUMENT_NOT_A_NUMBER_MESSAGE,
+                pendingChannelResult
+            )
+            return
+        }
+        val calendar = retrieveCalendar(calendarId, pendingChannelResult, true)
+        if (calendar == null) {
+            finishWithError(
+                EC.NOT_FOUND,
+                "The calendar with the ID $calendarId could not be found",
+                pendingChannelResult
+            )
+            return
+        }
+        val uri = ContentUris.withAppendedId(
+            CalendarContract.Calendars.CONTENT_URI,
+            calendarIdNumber
+        ).buildUpon()
+            .appendQueryParameter(CALLER_IS_SYNCADAPTER, "true")
+            .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, calendar.accountName)
+            .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_TYPE, calendar.accountType)
+            .build()
+        val values = ContentValues()
+        values.put(CalendarContract.Calendars.SYNC_EVENTS, 1)
+        values.put(CalendarContract.Calendars.VISIBLE, 1)
+        val updated = _context?.contentResolver?.update(uri, values, null, null) ?: 0
+        finishWithSuccess(updated > 0, pendingChannelResult)
+    }
+
+    /**
+     * Lists the ids of every non-deleted row in the Events table for a calendar.
+     * Reads Events, not Instances: Instances omits exactly the rows the repair is after.
+     */
+    fun retrieveEventIds(calendarId: String, pendingChannelResult: MethodChannel.Result) {
+        if (!arePermissionsGranted()) {
+            finishWithError(
+                EC.NOT_AUTHORIZED,
+                "Calendar permissions are needed to read the calendar",
+                pendingChannelResult
+            )
+            return
+        }
+        if (calendarId.toLongOrNull() == null) {
+            finishWithError(
+                EC.INVALID_ARGUMENT,
+                EM.CALENDAR_ID_INVALID_ARGUMENT_NOT_A_NUMBER_MESSAGE,
+                pendingChannelResult
+            )
+            return
+        }
+        val ids = mutableListOf<String>()
+        val cursor: Cursor? = _context?.contentResolver?.query(
+            Events.CONTENT_URI,
+            arrayOf(Events._ID),
+            "${Events.CALENDAR_ID} = ? AND ${Events.DELETED} != 1",
+            arrayOf(calendarId),
+            null
+        )
+        try {
+            while (cursor?.moveToNext() == true) {
+                ids.add(cursor.getLong(0).toString())
+            }
+        } finally {
+            cursor?.close()
+        }
+        finishWithSuccess(ids, pendingChannelResult)
     }
 
     fun retrieveEvents(
@@ -915,8 +1004,12 @@ class CalendarDelegate(binding: ActivityPluginBinding?, context: Context) :
         if (atLeastAPI(17)) {
             val isPrimary = cursor.getString(Cst.CALENDAR_PROJECTION_IS_PRIMARY_INDEX)
             calendar.isDefault = isPrimary == "1"
+            calendar.syncEvents =
+                cursor.getInt(Cst.CALENDAR_PROJECTION_SYNC_EVENTS_INDEX) == 1
         } else {
             calendar.isDefault = false
+            calendar.syncEvents =
+                cursor.getInt(Cst.CALENDAR_PROJECTION_OLDER_API_SYNC_EVENTS_INDEX) == 1
         }
         return calendar
     }

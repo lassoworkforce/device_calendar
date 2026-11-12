@@ -342,6 +342,48 @@ class DeviceCalendarPlugin {
     );
   }
 
+  /// Android only. Turns the provider's `sync_events` and `visible` flags on
+  /// for an existing calendar, so a rebuild of the Instances table keeps it.
+  /// Returns a [Result] that is true when the calendar row was updated.
+  Future<Result<bool>> enableCalendarSync(String? calendarId) async {
+    return _invokeChannelMethod(
+      ChannelConstants.methodNameEnableCalendarSync,
+      assertParameters: (result) {
+        _validateCalendarIdParameter(result, calendarId);
+        _assertAndroid(result);
+      },
+      arguments: () => <String, Object?>{
+        ChannelConstants.parameterNameCalendarId: calendarId,
+      },
+    );
+  }
+
+  /// Android only. Lists the ids of every event row of a calendar from the
+  /// Events table, including rows the Instances table no longer shows.
+  Future<Result<List<String>>> retrieveEventIds(String? calendarId) async {
+    return _invokeChannelMethod(
+      ChannelConstants.methodNameRetrieveEventIds,
+      assertParameters: (result) {
+        _validateCalendarIdParameter(result, calendarId);
+        _assertAndroid(result);
+      },
+      arguments: () => <String, Object?>{
+        ChannelConstants.parameterNameCalendarId: calendarId,
+      },
+      evaluateResponse: (rawData) =>
+          (rawData as List<Object?>).map((e) => e.toString()).toList(),
+    );
+  }
+
+  void _assertAndroid<T>(Result<T> result) {
+    _assertParameter(
+      result,
+      defaultTargetPlatform == TargetPlatform.android,
+      ErrorCodes.invalidArguments,
+      'Android only',
+    );
+  }
+
   /// Displays a native iOS view [EKEventViewController]
   /// https://developer.apple.com/documentation/eventkitui/ekeventviewcontroller
   ///

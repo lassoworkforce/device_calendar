@@ -25,6 +25,8 @@ private const val DELETE_EVENT_INSTANCE_METHOD = "deleteEventInstance"
 private const val CREATE_OR_UPDATE_EVENT_METHOD = "createOrUpdateEvent"
 private const val CREATE_CALENDAR_METHOD = "createCalendar"
 private const val DELETE_CALENDAR_METHOD = "deleteCalendar"
+private const val ENABLE_CALENDAR_SYNC_METHOD = "enableCalendarSync"
+private const val RETRIEVE_EVENT_IDS_METHOD = "retrieveEventIds"
 
 // Method arguments
 private const val CALENDAR_ID_ARGUMENT = "calendarId"
@@ -170,6 +172,14 @@ class DeviceCalendarPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             DELETE_CALENDAR_METHOD -> {
                 val calendarId = call.argument<String>(CALENDAR_ID_ARGUMENT)
                 _calendarDelegate.deleteCalendar(calendarId!!, result)
+            }
+            ENABLE_CALENDAR_SYNC_METHOD -> {
+                val calendarId = call.argument<String>(CALENDAR_ID_ARGUMENT)
+                _calendarDelegate.enableCalendarSync(calendarId!!, result)
+            }
+            RETRIEVE_EVENT_IDS_METHOD -> {
+                val calendarId = call.argument<String>(CALENDAR_ID_ARGUMENT)
+                _calendarDelegate.retrieveEventIds(calendarId!!, result)
             }
             else -> {
                 result.notImplemented()

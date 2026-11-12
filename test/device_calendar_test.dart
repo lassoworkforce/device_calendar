@@ -64,6 +64,22 @@ void main() {
     expect(result.data?[0].name, fakeCalendarName);
   });
 
+  test('RetrieveCalendars_Parses_SyncEvents', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
+      return '[{"id":"1","isReadOnly":false,"name":"a","syncEvents":true},'
+          '{"id":"2","isReadOnly":false,"name":"b","syncEvents":false},'
+          '{"id":"3","isReadOnly":false,"name":"c"}]';
+    });
+
+    final result = await deviceCalendarPlugin.retrieveCalendars();
+    expect(result.data?[0].syncEvents, true);
+    expect(result.data?[1].syncEvents, false);
+    // iOS and older shapes do not send the field.
+    expect(result.data?[2].syncEvents, isNull);
+    expect(result.data?[0].toJson()['syncEvents'], true);
+  });
+
   test('RetrieveEvents_CalendarId_IsRequired', () async {
     const String? calendarId = null;
     const params = RetrieveEventsParams();
@@ -106,6 +122,56 @@ void main() {
         'eventId': eventId
       })
     ]);
+  });
+
+  test('EnableCalendarSync_CalendarId_IsRequired', () async {
+    const String? calendarId = null;
+
+    final result = await deviceCalendarPlugin.enableCalendarSync(calendarId);
+    expect(result.isSuccess, false);
+    expect(result.errors[0].errorCode, equals(ErrorCodes.invalidArguments));
+    expect(log, isEmpty);
+  });
+
+  test('EnableCalendarSync_PassesArguments_Correctly', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
+      log.add(methodCall);
+      return true;
+    });
+
+    final result = await deviceCalendarPlugin.enableCalendarSync('42');
+    expect(log, <Matcher>[
+      isMethodCall('enableCalendarSync',
+          arguments: <String, dynamic>{'calendarId': '42'})
+    ]);
+    expect(result.isSuccess, true);
+    expect(result.data, true);
+  });
+
+  test('RetrieveEventIds_CalendarId_IsRequired', () async {
+    const String? calendarId = null;
+
+    final result = await deviceCalendarPlugin.retrieveEventIds(calendarId);
+    expect(result.isSuccess, false);
+    expect(result.errors[0].errorCode, equals(ErrorCodes.invalidArguments));
+    expect(log, isEmpty);
+  });
+
+  test('RetrieveEventIds_PassesArguments_AndParsesIds', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
+      log.add(methodCall);
+      return <Object?>['7', '8', '9'];
+    });
+
+    final result = await deviceCalendarPlugin.retrieveEventIds('42');
+    expect(log, <Matcher>[
+      isMethodCall('retrieveEventIds',
+          arguments: <String, dynamic>{'calendarId': '42'})
+    ]);
+    expect(result.isSuccess, true);
+    expect(result.data, ['7', '8', '9']);
   });
 
   test('CreateEvent_Arguments_Invalid', () async {
